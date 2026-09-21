@@ -71,8 +71,9 @@ sudo systemctl daemon-reload
 sudo systemctl enable --now af-pro-display.service
 ```
 
-The service runs as root by default (see [Security notes](#security-notes)
-if you'd rather not).
+`install.sh` asks interactively whether to run the service as root (upstream's
+default) or as an unprivileged user (recommended — see
+[Security notes](#security-notes)); doing it by hand here defaults to root.
 
 ### Debian package
 
@@ -178,12 +179,15 @@ sudo systemctl stop af-pro-display      # stop
 
 ## Security notes
 
-- The unit ships with `ProtectSystem=strict` and `NoNewPrivileges=true`, but
-  runs as root by default because that's upstream's default. The udev rule
-  already grants the device `MODE="0666"` / `TAG+="uaccess"`, so root is not
-  actually required — you can run it as an unprivileged user (in the
-  `plugdev` group, or logged in at the console) by adding `User=` /
-  `Group=` to the systemd unit if you'd like tighter isolation.
+- The unit ships with `ProtectSystem=strict` and `NoNewPrivileges=true`.
+  Root is not actually required: the udev rule grants the display device to
+  members of the `plugdev` group. `install.sh` asks which you want and sets
+  it up either way — picking "unprivileged" adds the chosen user to
+  `plugdev` and drops a `User=`/`Group=` systemd drop-in at
+  `/etc/systemd/system/af-pro-display.service.d/override.conf`, without
+  touching the shipped unit file. Re-run `install.sh` any time to switch
+  between root and unprivileged; the config path follows whichever user the
+  service runs as (`/root/.config/...` for root, `~/.config/...` otherwise).
 - NVML is loaded via `libnvidia-ml.so.1` by bare filename (relies on the
   dynamic linker's default search path); this is upstream's existing
   behavior and is low-risk under systemd's clean environment, but be aware
