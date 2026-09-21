@@ -29,19 +29,38 @@ combination of sensors**, including multiple GPUs.
 
 ## Installing
 
-### Build from source
+### Quick install (recommended)
+
+One command builds it from source (installing Rust and build dependencies
+if needed) and sets it up as a systemd service:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Menimm/antec-flux-pro-display/main/install.sh | bash
+```
+
+Safe to re-run any time (e.g. after `git pull`) — it rebuilds, reinstalls,
+and restarts the service so the update actually takes effect. It never
+touches your `config.toml`.
+
+If you'd rather review the script first (sensible, since it's piped into
+`bash`):
+
+```bash
+git clone https://github.com/Menimm/antec-flux-pro-display.git
+cd antec-flux-pro-display
+less install.sh   # read it
+./install.sh
+```
+
+### Manual install
+
+If you'd rather do it by hand, or need to customize the steps:
 
 ```bash
 git clone https://github.com/Menimm/antec-flux-pro-display.git
 cd antec-flux-pro-display
 cargo build --release
-```
 
-This produces `target/release/af-pro-display`.
-
-### Install as a systemd service
-
-```bash
 sudo install -m 0755 target/release/af-pro-display /usr/bin/af-pro-display
 sudo install -m 0644 packaging/udev/99-af-pro-display.rules /lib/udev/rules.d/
 sudo install -m 0644 packaging/systemd/af-pro-display.service /lib/systemd/system/
