@@ -52,6 +52,13 @@ fn main() -> Result<()> {
     let flicker_interval = Duration::from_millis(config.flicker_interval_ms.max(1));
     let flicker_reset_pause = Duration::from_millis(config.flicker_reset_pause_ms);
 
+    // Flicker slots hold a source on screen for a whole `flicker_interval`;
+    // re-reading the sensor on every poll during that hold would make the
+    // displayed number drift even though the rotation hasn't switched yet.
+    // Fixed slots have no "hold" to speak of, so they keep reading live.
+    let slot_1_is_flicker = matches!(&slot_1, SlotConfig::Flicker(_));
+    let slot_2_is_flicker = matches!(&slot_2, SlotConfig::Flicker(_));
+
     let mut slot_1_state = SlotState::new(slot_1);
     let mut slot_2_state = SlotState::new(slot_2);
     let cpu_device = config.cpu_device.clone().or_else(default_cpu_device);
@@ -63,6 +70,29 @@ fn main() -> Result<()> {
         }
     };
 
+    // Caches the last sensor reading per slot, keyed by which source it was
+    // read for, so a held flicker source can be redisplayed unchanged.
+    let mut slot_1_held: Option<(Source, Option<f32>)> = None;
+    let mut slot_2_held: Option<(Source, Option<f32>)> = None;
+
+    let resolve = |source: Option<Source>,
+                   is_flicker: bool,
+                   held: &mut Option<(Source, Option<f32>)>|
+     -> Option<f32> {
+        let source = source?;
+        if !is_flicker {
+            return read_source(source);
+        }
+        if let Some((held_source, held_temp)) = held {
+            if *held_source == source {
+                return *held_temp;
+            }
+        }
+        let temp = read_source(source);
+        *held = Some((source, temp));
+        temp
+    };
+
     // Handle CTRL+C and other termination gracefully
     let run = running.clone();
     ctrlc::set_handler(move || {
@@ -72,12 +102,10 @@ fn main() -> Result<()> {
 
     // Loop until the program is terminated
     while running.load(Ordering::SeqCst) {
-        let slot_1_temp = slot_1_state
-            .current_output(flicker_interval, flicker_reset_pause)
-            .and_then(read_source);
-        let slot_2_temp = slot_2_state
-            .current_output(flicker_interval, flicker_reset_pause)
-            .and_then(read_source);
+        let slot_1_source = slot_1_state.current_output(flicker_interval, flicker_reset_pause);
+        let slot_2_source = slot_2_state.current_output(flicker_interval, flicker_reset_pause);
+        let slot_1_temp = resolve(slot_1_source, slot_1_is_flicker, &mut slot_1_held);
+        let slot_2_temp = resolve(slot_2_source, slot_2_is_flicker, &mut slot_2_held);
 
         device.send_payload(&slot_1_temp, &slot_2_temp);
         std::thread::sleep(Duration::from_millis(config.polling_interval));
